@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>めくる書架 | 質問からNDCを推定してスワイプで資料さがし</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Maru+Gothic:wght@400;500;700&display=swap">
+<style>
+:root{
+  --wood:#7b5232;--shelf-back:#e4d3ae;
+  --paper:#f3ead8;--paper2:#eadfc6;--card:#fffaf0;--ink:#33291f;--sub:#7a6a58;--line:#d8c8a8;
+  --green:#2f5d4a;--green-ink:#f7efdc;--brass:#b4852f;--brick:#a8483a;--like:#2f6b53;--nope:#a8483a;
+  --shadow:0 2px 0 rgba(120,90,50,.18),0 12px 26px rgba(80,55,20,.14);
+  --serif:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --sans:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic",sans-serif}
+@media(prefers-color-scheme:dark){:root{
+  --wood:#5a3b24;--shelf-back:#2b2118;--paper:#1d1813;--paper2:#272019;--card:#2d261e;--ink:#f0e6d3;--sub:#b3a38c;--line:#463b2e;
+  --green:#264a3a;--green-ink:#f7efdc;--brass:#d2a24a;--brick:#e07c6c;--like:#58c4a0;--nope:#e07c6c;
+  --shadow:0 2px 0 rgba(0,0,0,.35),0 12px 26px rgba(0,0,0,.35)}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);overflow:hidden;
+  background-image:repeating-linear-gradient(transparent 0 31px,rgba(150,115,60,.07) 31px 32px)}
+header{background:var(--green);color:var(--green-ink);border-bottom:4px solid var(--brass);
+  display:flex;align-items:center;justify-content:space-between;padding:12px 18px;gap:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:34px;height:34px;flex:none}
+h1{font:800 22px/1.1 var(--serif);margin:0;letter-spacing:.08em}
+.tag{margin:2px 0 0;font-size:11px;opacity:.82;letter-spacing:.06em}
+nav{display:flex;gap:8px}
+nav button{font:700 14px var(--sans);background:transparent;border:1px solid rgba(247,239,220,.55);color:var(--green-ink);padding:7px 15px;border-radius:99px;cursor:pointer}
+nav button[aria-pressed=true]{background:var(--green-ink);color:var(--green);border-color:var(--green-ink)}
+main{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;min-height:0;overflow-y:auto;padding:14px 0 12px}
+section{width:min(92vw,520px)}
+.panel{position:relative;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:22px 20px 20px;box-shadow:var(--shadow)}
+.panel::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--brass);border-radius:8px 8px 0 0;opacity:.85}
+.panel h2{font:800 20px/1.55 var(--serif);margin:4px 0 14px}
+.step{margin:0;color:var(--sub);font-size:13px;letter-spacing:.08em}
+.chips{display:flex;flex-direction:column;gap:9px}
+.chip{font:700 15px var(--sans);text-align:left;padding:13px 14px;border-radius:6px;border:1px solid var(--line);border-left:6px solid var(--brass);background:var(--paper);color:var(--ink);cursor:pointer;transition:background .15s}
+.chip:hover{background:var(--paper2)}
+.chip[aria-pressed=true]{background:var(--green);color:var(--green-ink);border-color:var(--green);border-left-color:var(--brass)}
+.nav{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px}
+.nav button,.pri,.ghost{font:700 14px var(--sans);padding:10px 18px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.nav button.pri,.pri{background:var(--green);color:var(--green-ink);border-color:var(--green)}
+.nav button:disabled{opacity:.4;cursor:default}
+.cand{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px dashed var(--line);cursor:pointer}
+.cand input{width:20px;height:20px;accent-color:var(--green)}
+.cand b{font:800 18px var(--serif);min-width:3.4ch;text-align:center;padding:2px 8px;border:1px solid var(--line);border-radius:4px;background:var(--paper)}
+.cand span{color:var(--sub);font-size:14px}
+.note{font-size:13px;color:var(--sub);line-height:1.7;margin:10px 0 0}
+.note summary{cursor:pointer}
+.panel input[type=text]{width:100%;font:16px var(--sans);padding:11px;border-radius:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+#deck{position:relative;width:min(92vw,380px);height:min(52vh,500px);margin:2px 0 0}
+.card{position:absolute;inset:0 0 8px;background:var(--card);border-radius:10px;border:1px solid var(--line);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;touch-action:none;user-select:none;cursor:grab;will-change:transform}
+.card.back{transform:scale(.95) translateY(12px);pointer-events:none}
+.cover{flex:1;min-height:0;position:relative;background:linear-gradient(180deg,#eadcbf,#d5c19a)}
+.cover img{position:absolute;inset:18px;width:calc(100% - 36px);height:calc(100% - 36px);object-fit:contain;filter:drop-shadow(0 6px 8px rgba(70,45,15,.35));pointer-events:none}
+.cover .nocover{position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;font:800 20px/1.5 var(--serif);color:#4a3a28;text-align:center;padding:20px}
+.nocover small{font:12px var(--sans);color:#7a6a58}
+.meta{padding:14px 18px 18px;border-top:3px double var(--line)}
+.meta h2{font:800 18px/1.45 var(--serif);margin:0 0 4px}
+.meta p{margin:0;font-size:13px;color:var(--sub)}
+.meta .d{margin-top:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.7;color:var(--ink)}
+.stamp{pointer-events:none;position:absolute;top:22px;font:800 24px var(--serif);border:3px double;padding:3px 14px;border-radius:6px;opacity:0;background:var(--card);letter-spacing:.1em}
+.stamp.l{left:18px;color:var(--like);transform:rotate(-10deg)}
+.stamp.n{right:18px;color:var(--nope);transform:rotate(10deg)}
+#btns{display:flex;gap:30px;padding:12px 0 6px;justify-content:center}
+#btns button{width:76px;height:76px;border-radius:50%;border:2px solid;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:700 12px var(--sans);box-shadow:0 3px 0 rgba(120,90,50,.2)}
+#btns svg{width:24px;height:24px}
+#no{background:var(--card);color:var(--nope);border-color:var(--nope)}
+#yes{background:var(--green);color:var(--green-ink);border-color:var(--green)}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:20px;color:var(--sub);line-height:1.7}
+.empty b{font:800 18px var(--serif);color:var(--ink)}
+.empty button{font:700 14px var(--sans);padding:10px 20px;border-radius:99px;border:0;background:var(--green);color:var(--green-ink);cursor:pointer}
+.bar{margin-top:8px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--sub);padding-bottom:6px}
+#list .row{display:flex;gap:12px;padding:12px;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--brass);border-radius:6px;margin-bottom:10px;box-shadow:0 2px 0 rgba(120,90,50,.12)}
+#list img{width:56px;height:80px;object-fit:cover;border-radius:2px;background:#d5c19a}
+#list b{font:800 15px/1.5 var(--serif)}#list small{display:block;color:var(--sub);margin-top:2px}
+#list a{color:var(--like);font-size:13px;font-weight:700}
+.tools{display:flex;gap:8px;margin-bottom:12px}
+.tools button{font:700 13px var(--sans);padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+#msg{font-size:12px;color:var(--sub);min-height:16px;padding:6px 14px;text-align:center;line-height:1.6;max-width:92vw}
+@media(prefers-reduced-motion:reduce){.card,.chip{transition:none!important}}
+/* 詳細書誌シート */
+.hint{position:absolute;right:10px;bottom:10px;z-index:2;font:700 11px var(--sans);color:#fff;background:rgba(40,28,14,.62);padding:4px 10px;border-radius:99px;pointer-events:none;letter-spacing:.04em}
+.sheet{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet-bg{position:absolute;inset:0;background:rgba(30,20,10,.58)}
+.sheet-body{position:relative;width:min(100vw,560px);max-height:90vh;overflow-y:auto;background:var(--card);color:var(--ink);border-top:6px solid var(--brass);border-radius:16px 16px 0 0;padding:18px 18px calc(22px + env(safe-area-inset-bottom,0px));box-shadow:0 -10px 34px rgba(0,0,0,.4)}
+.sh-close{position:sticky;top:0;float:right;margin:-6px -6px 0 8px;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:700 18px var(--sans);cursor:pointer;z-index:3}
+.sh-head{display:flex;gap:14px;align-items:flex-start}
+.sh-cover{position:relative;width:104px;flex:none;aspect-ratio:5/7;background:linear-gradient(180deg,#eadcbf,#d5c19a);border-radius:3px;overflow:hidden;box-shadow:3px 5px 8px rgba(70,45,15,.35)}
+.sh-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.sh-cover .nc{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:8px;text-align:center;font:800 12px/1.5 var(--serif);color:#4a3a28}
+.sh-title{font:800 19px/1.5 var(--serif);margin:0 0 4px}
+.sh-sub{margin:0;font-size:13px;color:var(--sub);line-height:1.6}
+.biblio{display:grid;grid-template-columns:6.5em 1fr;gap:8px 12px;margin:18px 0 6px;padding:14px 0;border-top:3px double var(--line);border-bottom:1px dashed var(--line);font-size:14px;line-height:1.6}
+.biblio dt{color:var(--sub);font-weight:700}
+.biblio dd{margin:0;word-break:break-word}
+.sh-sec h3{font:800 15px var(--serif);margin:16px 0 6px;padding-left:8px;border-left:5px solid var(--brass)}
+.sh-sec p{margin:0;font-size:14px;line-height:1.85;white-space:normal}
+.sh-act{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.sh-act a,.sh-act button{font:700 14px var(--sans);padding:10px 18px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-decoration:none}
+.sh-act .pri{background:var(--green);color:var(--green-ink);border-color:var(--green)}
+.sh-act .no{color:var(--nope);border-color:var(--nope)}
+.sh-note{font-size:12px;color:var(--sub);margin:14px 0 0;line-height:1.7}
+.row[data-open]{cursor:pointer}
+
+/* 面出しの書架 */
+.sign{margin:0 auto 12px;text-align:center;background:linear-gradient(180deg,#dcb766,#b4852f);color:#3a2a10;border-radius:6px;padding:9px 14px;font:800 14px/1.5 var(--serif);letter-spacing:.08em;box-shadow:0 2px 0 rgba(90,60,10,.4),0 8px 16px rgba(80,55,20,.2)}
+.sign small{display:block;font:700 11px/1.6 var(--sans);letter-spacing:.04em;opacity:.9}
+.plate{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 16px 4px;margin-bottom:12px;box-shadow:var(--shadow)}
+.plate h2{font:800 19px/1.55 var(--serif);margin:2px 0 8px}
+.shelf{background:var(--shelf-back);border:10px solid var(--wood);border-radius:6px;padding:18px 8px 0;box-shadow:inset 0 10px 16px rgba(0,0,0,.28),0 10px 22px rgba(80,55,20,.25)}
+.srow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end;padding:0 4px}
+.srow::after{content:"";grid-column:1/-1;height:16px;margin:-2px -12px 16px;background:linear-gradient(#b27e4f,#7b5232 70%,#5f3d22);box-shadow:0 4px 5px rgba(0,0,0,.35);border-radius:2px}
+.book{position:relative;aspect-ratio:5/7;border:0;border-radius:3px 6px 6px 3px;background:linear-gradient(160deg,var(--c),color-mix(in srgb,var(--c) 68%,#000));color:#f7efdc;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:22px 6px 20px 14px;font:800 13px/1.55 var(--serif);text-align:center;letter-spacing:.02em;word-break:keep-all;box-shadow:inset 4px 0 0 rgba(0,0,0,.3),inset 5px 0 0 rgba(255,255,255,.14),3px 6px 7px rgba(0,0,0,.4);transition:transform .15s}
+.book::before{content:"";position:absolute;left:14px;right:6px;top:11px;height:6px;border-top:2px solid #d9b25f;border-bottom:1px solid #d9b25f;opacity:.9}
+.book::after{content:"";position:absolute;left:14px;right:6px;bottom:11px;border-top:1px solid #d9b25f;opacity:.85}
+.book span{display:block;overflow-wrap:anywhere}
+.book:hover{transform:translateY(-6px)}
+.book[aria-pressed=true]{transform:translateY(-9px);outline:3px solid var(--brass);outline-offset:1px}
+.period{width:min(92vw,380px);text-align:center;font:700 12px/1.6 var(--sans);color:var(--ink);background:color-mix(in srgb,var(--brass) 22%,var(--card));border:1px solid var(--line);border-radius:14px;padding:6px 14px;margin:0 0 8px}
+@media(prefers-reduced-motion:reduce){.book{transition:none!important}}
+
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="6" width="8" height="28" rx="1.5" fill="#f7efdc"/><rect x="14" y="10" width="8" height="24" rx="1.5" fill="#d2a24a"/><rect x="24" y="4" width="8" height="30" rx="1.5" fill="#f7efdc" opacity=".85"/><rect x="2" y="35" width="34" height="3" rx="1.5" fill="#f7efdc"/></svg>
+    <div><h1>めくる書架</h1><p class="tag">最近の資料を、めくって出会う</p></div>
+  </div>
+  <nav><button id="tDeck" aria-pressed="true">さがす</button><button id="tList" aria-pressed="false">気になる <span id="cnt">0</span></button></nav>
+</header>
+<main>
+  <section id="qa"></section>
+  <section id="nd" class="panel" style="display:none"></section>
+  <section id="play" style="display:none;align-items:center;flex-direction:column">
+    <div class="period" id="period"></div>
+    <div id="deck"></div>
+    <div id="btns" style="justify-content:center">
+      <button id="no" aria-label="パス(左へ)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/></svg>パス</button>
+      <button id="yes" aria-label="気になる(右へ)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10v17l-5-4-5 4z" fill="currentColor"/></svg>気になる</button>
+    </div>
+    <div class="bar">
+      <button class="ghost" id="redo">質問からやり直す</button>
+    </div>
+  </section>
+  <section id="list" style="display:none"></section>
+  <div id="msg"></div>
+</main>
+<div id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="shTitle"><div class="sheet-bg" id="shBg"></div><div class="sheet-body" id="shBody"></div></div>
+<script>
+// ===== 定数 =====
+const PRED="https://lab.ndl.go.jp/ndc/api/predict";            // NDC Predictor API(POST, bib=...)
+const SRU ="https://ndlsearch.ndl.go.jp/api/sru";             // NDLサーチ SRU(並び順を指定できる)
+const NDL ="https://ndlsearch.ndl.go.jp/api/opensearch";      // NDLサーチ OpenSearch(SRUが使えないときの代替)
+const OPENBD="https://api.openbd.jp/v1/get?isbn=";            // OpenBD(書影・書誌)
+const THIS_YEAR=new Date().getFullYear();
+const CNT=500;          // NDLサーチ1回で取得できる最大件数(501件目以降は取得不可)
+const MAX_REQ=80;       // 1回の検索で呼ぶSRUの上限回数(期間を分けて取得するとき)
+// 取得する期間: 直近半年(今月を含む6か月)。検索を実行するたびに、その時点の現在時刻から作る。from/untilは「YYYY-MM」
+const PERIOD_MONTHS=6,PERIOD_NAME="直近半年";
+const ym=(y,m)=>`${y}-${String(m).padStart(2,"0")}`;
+function rangeNow(){
+  const now=new Date(),end={y:now.getFullYear(),m:now.getMonth()+1};
+  let y=end.y,m=end.m-(PERIOD_MONTHS-1);while(m<1){m+=12;y--}
+  const start={y,m};
+  return{start,end,from:ym(start.y,start.m),until:ym(end.y,end.m),span:`${start.y}年${start.m}月〜${end.y}年${end.m}月`,label:`${PERIOD_NAME}(${start.y}年${start.m}月〜${end.y}年${end.m}月)`};
+}
+const K="swipe-books-v2";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+// ===== NDCの名称(1桁・2桁・主な3桁) =====
+const N1={0:"総記",1:"哲学・宗教",2:"歴史・地理",3:"社会科学",4:"自然科学",5:"技術・工学",6:"産業",7:"芸術・スポーツ",8:"言語",9:"文学"};
+const N2={"00":"総記","01":"図書館","02":"図書・書誌学","03":"百科事典","04":"論文集","05":"逐次刊行物","06":"団体","07":"ジャーナリズム","08":"叢書","09":"貴重書",
+"10":"哲学","11":"哲学各論","12":"東洋思想","13":"西洋哲学","14":"心理学","15":"倫理学","16":"宗教","17":"神道","18":"仏教","19":"キリスト教",
+"20":"歴史","21":"日本史","22":"アジア史","23":"ヨーロッパ史","24":"アフリカ史","25":"北アメリカ史","26":"南アメリカ史","27":"オセアニア史","28":"伝記","29":"地理・紀行",
+"30":"社会科学","31":"政治","32":"法律","33":"経済","34":"財政","35":"統計","36":"社会","37":"教育","38":"風俗・民俗","39":"国防・軍事",
+"40":"自然科学","41":"数学","42":"物理学","43":"化学","44":"天文・宇宙","45":"地球科学","46":"生物科学","47":"植物学","48":"動物学","49":"医学・薬学",
+"50":"技術・工学","51":"土木工学","52":"建築学","53":"機械工学","54":"電気工学","55":"海洋・船舶","56":"金属・鉱山","57":"化学工業","58":"製造工業","59":"家政・生活科学",
+"60":"産業","61":"農業","62":"園芸","63":"蚕糸業","64":"畜産業","65":"林業","66":"水産業","67":"商業","68":"運輸・交通","69":"通信事業",
+"70":"芸術・美術","71":"彫刻","72":"絵画・書道","73":"版画","74":"写真・印刷","75":"工芸","76":"音楽・舞踊","77":"演劇・映画","78":"スポーツ・体育","79":"諸芸・娯楽",
+"80":"言語","81":"日本語","82":"中国語","83":"英語","84":"ドイツ語","85":"フランス語","86":"スペイン語","87":"イタリア語","88":"ロシア語","89":"その他の言語",
+"90":"文学","91":"日本文学","92":"中国文学","93":"英米文学","94":"ドイツ文学","95":"フランス文学","96":"スペイン文学","97":"イタリア文学","98":"ロシア文学","99":"その他の文学"};
+const N3={"007":"情報学・情報科学","019":"読書・読書法","159":"人生訓・自己啓発","289":"個人の伝記","291":"日本地理・紀行","335":"企業・経営","336":"経営管理","366":"労働問題","369":"社会福祉","375":"教育課程・学習指導","379":"社会教育",
+"491":"基礎医学","493":"臨床医学","498":"衛生学・公衆衛生","548":"情報工学","549":"電子工学","596":"食品・料理","726":"漫画・グラフィックアート","913":"日本文学(小説・物語)","914":"日本文学(評論・随筆)"};
+function ndcLabel(c){c=String(c);return N3[c]||N2[c.slice(0,2)]||N1[c[0]]||""}
+
+// ===== 診断 =====
+const DIAG={bib:"",predict:{},ndl:[],ndlIsbns:0,openbdHit:0,withCover:0,errors:[]};
+function showDiag(){console.debug("[めくる書架]",DIAG)}   // 画面には出さず、ブラウザのコンソールにだけ記録する
+function msg(t){$("msg").textContent=t}
+
+// ===== 保存 =====
+let store;try{store=JSON.parse(localStorage.getItem(K))}catch(e){}
+store=store||{};store.liked=store.liked||[];store.seen=store.seen||[];store.meta=store.meta||{};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(store))}catch(e){}};
+
+// ===== 質問(すべて選択式) =====
+// 各選択肢の2番目の値は、NDC Predictorに渡すキーワード
+const THEMES={
+ "情報・IT・AI":[["プログラミング・開発","プログラミング ソフトウェア開発"],["生成AI・機械学習","生成AI 機械学習 人工知能"],["データ分析・統計","データ分析 統計"],["ネットワーク・セキュリティ","ネットワーク セキュリティ"],["Web・インターネット","ウェブ インターネット"],["図書館・情報検索","図書館 情報検索"]],
+ "経済・ビジネス":[["経営・マネジメント","経営 マネジメント 組織"],["マーケティング・営業","マーケティング 営業"],["会計・金融・投資","会計 金融 投資"],["経済・景気・政策","経済学 景気 政策"],["働き方・キャリア","働き方 キャリア 仕事術"]],
+ "社会・政治・法律・教育":[["政治・行政","政治 行政"],["法律","法律"],["教育・学校","教育 学校"],["福祉・介護・子育て","福祉 介護 子育て"],["社会問題・メディア","社会問題 ジャーナリズム"]],
+ "科学・数学・医学":[["数学","数学"],["物理・化学・宇宙","物理 化学 宇宙"],["生物・自然・環境","生物 自然 環境"],["医学・健康","医学 健康"],["心理学","心理学"]],
+ "暮らし・料理・ものづくり":[["料理・食","料理 食"],["家事・暮らし・住まい","家政 暮らし 住まい"],["農業・園芸","農業 園芸"],["建築・住宅","建築 住宅"],["機械・電気・工学","機械 電気 工学"]],
+ "歴史・地理・伝記":[["日本史","日本史"],["世界史","世界史"],["地理・旅行・紀行","地理 旅行 紀行"],["人物・伝記","伝記 人物"]],
+ "哲学・宗教・思想":[["哲学・思想","哲学 思想"],["宗教・仏教","宗教 仏教"],["倫理・生き方","倫理 生き方"]],
+ "芸術・スポーツ・趣味":[["美術・デザイン","美術 デザイン"],["音楽","音楽"],["映画・演劇・漫画","映画 演劇 漫画"],["スポーツ・運動","スポーツ 運動"],["写真・工芸・手芸","写真 工芸 手芸"],["ゲーム・娯楽","ゲーム 娯楽"]],
+ "言語・語学":[["日本語","日本語"],["英語","英語 学習"],["その他の外国語","外国語 学習"]],
+ "文学・小説・エッセイ":[["日本の小説","日本文学 小説"],["海外の小説","海外文学 小説 翻訳"],["エッセイ・随筆","エッセイ 随筆"],["詩・短歌・俳句","詩 短歌 俳句"]]
+};
+// 題の「|」は、本の表紙で改行してよい位置(表示では消える)
+const PURPOSE=[["基礎から|学びたい","入門"],["仕事や|実務に使いたい","実践"],["調べものの|参考にしたい","概説"],["読み物として|楽しみたい","エッセイ"]];
+const ans={cat:null,theme:null,purpose:null};
+const STEPS=[
+ {key:"cat",label:"どのジャンルの資料を探していますか?",opts:()=>Object.keys(THEMES).map(k=>[k,k.replace(/・/g," ")])},
+ {key:"theme",label:"もう少しだけ絞ると、どれに近いですか?",opts:()=>{const n=catName();return[...THEMES[n],[`${n}の全般`,n.replace(/・/g," ")]]}},
+ {key:"purpose",label:"目的はいちばんどれに近いですか?",opts:()=>PURPOSE}
+];
+const catName=()=>Object.keys(THEMES)[ans.cat];
+let step=0;
+
+function showScreen(name){
+  for(const id of ["qa","nd","play","list"])$(id).style.display=id===name?(id==="play"?"flex":""):"none";
+  $("tList").setAttribute("aria-pressed",name==="list");$("tDeck").setAttribute("aria-pressed",name!=="list");
+}
+const PAL=["#2f5d4a","#254a6b","#7a2f3a","#8a6a22","#36605f","#5b3a6b","#4a5560","#6b4426","#3b5a2c","#7a4a2a"];
+// 選択肢を、背表紙ではなく表紙を手前に向けた「面出し」の本として、棚に3冊ずつ並べる
+// 長い語(7文字以上)を含む題は、折り返さずに収まるよう文字を小さくする
+const fs=t=>{const n=Math.max(...t.split(/[・|]/).map(x=>x.length));return n>=7?11:n===6?12:13};
+function shelfRows(opts,key){
+  const rows=[];
+  for(let i=0;i<opts.length;i+=3)rows.push(opts.slice(i,i+3).map((o,j)=>[o,i+j]));
+  return rows.map(r=>`<div class="srow">${r.map(([o,i])=>
+    `<button class="book" data-i="${i}" aria-pressed="${ans[key]===i}" style="--c:${PAL[i%PAL.length]};font-size:${fs(o[0])}px"><span>${esc(o[0]).replace(/・/g,"・<wbr>").replace(/\|/g,"<wbr>")}</span></button>`).join("")}</div>`).join("");
+}
+function renderQA(){
+  const q=STEPS[step],opts=q.opts(),rg=rangeNow();
+  $("qa").innerHTML=`<div class="sign">新着の本棚<small>${PERIOD_NAME}に出版された最近の資料を紹介します<br>(${esc(rg.span)})</small></div>
+   <div class="plate"><p class="step">質問 ${step+1} / ${STEPS.length}</p><h2>${esc(q.label)}</h2></div>
+   <div class="shelf">${shelfRows(opts,q.key)}</div>
+   <div class="nav"><button id="qb" ${step?"":"disabled"}>戻る</button><span class="step" style="align-self:center">気になる本を選ぶと次へ進みます</span></div>`;
+  $("qa").querySelectorAll(".book").forEach(b=>b.onclick=()=>{
+    ans[q.key]=+b.dataset.i;
+    if(q.key==="cat")ans.theme=null;
+    msg("");
+    if(step<STEPS.length-1){step++;renderQA()}else runPredict();
+  });
+  $("qb").onclick=()=>{step--;renderQA()};
+}
+function themeWords(){return STEPS[1].opts()[ans.theme][1]}
+
+// ===== NDC Predictor =====
+const validCode=c=>/^\d{1,3}(\.\d+)?$/.test(String(c));
+function extractNdc(txt){
+  let data;try{data=JSON.parse(txt)}catch(e){data=null}
+  // 公式仕様: [{"value":"NDC値","label":"ラベル","score":"確信度(0-1)"}, ...]
+  if(Array.isArray(data)&&data.length&&data.every(o=>o&&typeof o==="object"&&"value" in o)){
+    return data.map(o=>({code:String(o.value).trim().padStart(3,"0"),label:o.label||"",score:o.score==null||o.score===""?null:parseFloat(o.score)}))
+      .filter(o=>validCode(o.code)).sort((x,y)=>(y.score??0)-(x.score??0)).slice(0,6);
+  }
+  const out=[];
+  (function walk(x){
+    if(Array.isArray(x)){
+      const m=x.length===2&&typeof x[0]==="string"&&typeof x[1]==="number"&&String(x[0]).match(/^(?:__label__)?(\d{1,3})$/);
+      if(m){out.push({code:m[1].padStart(3,"0"),score:x[1]});return}
+      return x.forEach(walk);
+    }
+    if(x&&typeof x==="object"){
+      const ks=Object.keys(x);
+      if(ks.length&&ks.every(k=>/^\d{1,3}$/.test(k))&&ks.every(k=>typeof x[k]==="number")){ks.forEach(k=>out.push({code:k.padStart(3,"0"),score:x[k]}));return}
+      let code=null,score=null;
+      for(const[k,v]of Object.entries(x)){
+        if((typeof v==="string"||typeof v==="number")&&/^\d{1,3}$/.test(String(v))&&/ndc|label|class|code|cls/i.test(k))code=String(v);
+        if(typeof v==="number"&&/score|conf|prob|ratio|rate/i.test(k))score=v;
+      }
+      if(code!==null)out.push({code:code.padStart(3,"0"),score});else Object.values(x).forEach(walk);
+    }else if(typeof x==="string"){const m=x.match(/^(?:__label__)?(\d{3})$/);if(m)out.push({code:m[1],score:null})}
+  })(data);
+  if(!out.length){const m=[...new Set((txt.match(/\b\d{3}\b/g)||[]))];m.forEach(c=>out.push({code:c,score:null}))}
+  const seen=new Set(),res=[];
+  out.sort((a,b)=>(b.score??0)-(a.score??0)).forEach(o=>{if(!seen.has(o.code)){seen.add(o.code);res.push(o)}});
+  return res.filter(o=>validCode(o.code)).slice(0,6);
+}
+async function runPredict(){
+  showScreen("nd");$("nd").innerHTML='<p>NDC Predictor で分野(NDC)を推定しています…</p>';
+  const bib=[themeWords(),PURPOSE[ans.purpose][1]].filter(Boolean).join(" ");
+  DIAG.bib=bib;let cands=[];
+  try{
+    const res=await fetch(PRED,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"bib="+encodeURIComponent(bib)});
+    DIAG.predict.status=res.status;const txt=await res.text();DIAG.predict.raw=txt.slice(0,600);
+    cands=extractNdc(txt);
+  }catch(e){DIAG.predict.error=String(e&&e.message||e)}
+  showDiag();renderNd(cands);
+}
+function renderNd(cands){
+  const rows=cands.map((c,i)=>{const pct=c.score==null||isNaN(c.score)?"":(c.score<=1?Math.round(c.score*100):Math.round(c.score))+"%";
+    return`<label class="cand"><input type="radio" name="ndc" class="ck" value="${esc(c.code)}" ${i===0?"checked":""}><b>${esc(c.code)}</b><span>${esc(c.label||ndcLabel(c.code))} ${pct}</span></label>`}).join("");
+  $("nd").innerHTML=`<p class="step">推定結果</p><h2>どの分野の資料を探しますか?</h2>
+   <p class="note">「${esc(DIAG.bib)}」から推定した分類です。1つ選ぶと、その分野の${rangeNow().label}に出版された最近の資料を取得します(500件を超える場合は、期間を分けて複数回取得します)。</p>
+   ${rows||'<p class="note">推定結果を取得できませんでした。下の欄にNDCを直接入力できます。</p>'}
+   <details class="note"><summary>NDCを直接指定する(任意)</summary>
+   <input type="text" id="mnd" placeholder="例: 007(入力した場合は、こちらを優先します)" autocomplete="off" style="margin-top:8px"></details>
+   <div class="nav"><button id="nb">質問に戻る</button><button id="ng" class="pri">この分野で資料を取得</button></div>`;
+  $("nb").onclick=()=>{showScreen("qa");renderQA()};
+  $("ng").onclick=()=>{
+    const m=($("mnd").value.match(/\d{1,3}(?:\.\d+)?/)||[])[0];
+    const sel=$("nd").querySelector(".ck:checked");
+    const code=m?(m.includes(".")?m:m.padStart(3,"0")):(sel&&validCode(sel.value)?sel.value:"");
+    if(!code){msg("分野を1つ選んでください");return}
+    msg("");fetchBooks(code);
+  };
+}
+
+// ===== NDLサーチ OpenSearch → ISBN =====
+const XSI="http://www.w3.org/2001/XMLSchema-instance",DC="http://purl.org/dc/elements/1.1/";
+function isbn13(p12){let t=0;for(let i=0;i<12;i++)t+=(+p12[i])*(i%2?3:1);return p12+((10-t%10)%10)}
+function toIsbn13(s){s=String(s).replace(/[^0-9Xx]/g,"").toUpperCase();
+  if(/^97[89]\d{10}$/.test(s))return s;
+  if(/^\d{9}[\dX]$/.test(s))return isbn13("978"+s.slice(0,9));return""}
+function parseRss(xml){
+  const doc=new DOMParser().parseFromString(xml,"application/xml");
+  if(doc.getElementsByTagName("parsererror").length)throw new Error("XMLを解析できませんでした: "+String(xml).slice(0,120).replace(/\s+/g," "));
+  const tot=doc.getElementsByTagNameNS("http://a9.com/-/spec/opensearchrss/1.0/","totalResults")[0];
+  const items=[...doc.getElementsByTagName("item")].map(it=>{
+    let isbn="";
+    for(const e of it.getElementsByTagNameNS(DC,"identifier")){
+      const t=e.getAttributeNS(XSI,"type")||e.getAttribute("xsi:type")||"";
+      if(/ISBN/i.test(t)){isbn=toIsbn13(e.textContent);if(isbn)break}
+    }
+    const g=n=>{const x=it.getElementsByTagNameNS(DC,n)[0];return x?x.textContent.trim():""};
+    const t=n=>{const x=it.getElementsByTagName(n)[0];return x?x.textContent.trim():""};
+    return{isbn,title:t("title"),author:t("author")||g("creator"),publisher:g("publisher"),pubdate:g("date")||t("pubDate")};
+  }).filter(x=>x.isbn);
+  return{items,total:tot?+tot.textContent:null};
+}
+// SRUの既定スキーマ(dc)にはISBNも出版年も含まれないため、DC-NDL(dcndl)で取得して読み取る
+function parseSru(xml){
+  const doc=new DOMParser().parseFromString(xml,"application/xml");
+  if(doc.getElementsByTagName("parsererror").length)throw new Error("XMLを解析できませんでした: "+String(xml).slice(0,120).replace(/\s+/g," "));
+  const ln=(el,n)=>[...el.getElementsByTagNameNS("*",n)];
+  const clean=t=>String(t||"").replace(/\s+/g," ").trim();
+  // 子要素を持たない要素のテキスト。入れ子(rdf:value / foaf:name)の場合はその中身を使う
+  const text=e=>{if(!e)return"";if(!e.children.length)return clean(e.textContent);const v=ln(e,"value")[0]||ln(e,"name")[0];return clean(v?v.textContent:e.textContent)};
+  const dg=ln(doc,"diagnostic")[0];
+  if(dg){const m=ln(dg,"message")[0]||ln(dg,"details")[0];throw new Error("SRUエラー: "+clean(m?m.textContent:dg.textContent).slice(0,100))}
+  const nr=ln(doc,"numberOfRecords")[0];
+  const recs=ln(doc,"recordData");
+  const items=recs.map(rd=>{
+    let isbn="";
+    for(const e of ln(rd,"identifier")){
+      const ty=[...e.attributes].map(a=>a.value).join(" "),t=clean(e.textContent);
+      if(/ISBN/i.test(ty)||/^(97[89][\d-]{10,14}|[\d-]{9,12}[\dXx])$/.test(t)){const v=toIsbn13(t);if(v){isbn=v;break}}
+    }
+    const first=n=>{const els=ln(rd,n);return text(els.find(x=>!x.children.length)||els[0])};
+    const authors=ln(rd,"creator").map(text).filter(Boolean).slice(0,3).join("、");
+    // NDC: dcterms:subject の rdf:resource(例 .../class/ndc9/007.6)から取り出す
+    const ndcs=ln(rd,"subject").map(e=>{const v=[...e.attributes].map(a=>a.value).find(v=>/ndc/i.test(v)&&/[\d.]+$/.test(v));return v?v.match(/([\d.]+)$/)[1]:""}).filter(Boolean);
+    return{isbn,title:first("title"),author:authors,publisher:first("publisher"),pubdate:first("issued")||first("date"),
+      price:first("price"),extent:first("extent"),series:first("seriesTitle"),volume:first("volume"),edition:first("edition"),place:first("publicationPlace"),ndc:ndcs[0]||""};
+  }).filter(x=>x.isbn);
+  return{items,total:nr?+nr.textContent:null,records:recs.length};
+}
+// ===== NDLサーチへの問い合わせ(アクセス集中を避けるため、1件ずつ間隔をあけて送る) =====
+const GAP=1000;                       // リクエストの間隔(ミリ秒)
+const RETRY=[2000,4000,8000,16000];   // 429(アクセス過多)などのときの再試行までの待ち時間
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let chain=Promise.resolve();
+function throttled(fn){const p=chain.then(fn);chain=p.then(()=>sleep(GAP),()=>sleep(GAP));return p}
+// 指定期間(from〜until。YYYY / YYYY-MM / YYYY-MM-DD のいずれか。両方同じ形式)の書誌を、出版年の新しい順に最大CNT件取得する。
+// 429やサーバーエラー、通信エラー(429はCORSヘッダーが付かず、ブラウザでは通信エラーに見える)のときは、待ってから再試行する
+async function sruRange(code,from,until,ctx){
+  const q=`ndc="${code}" and from="${from}" and until="${until}"`;
+  const u=SRU+"?operation=searchRetrieve&version=1.2&recordSchema=dcndl&onlyBib=true&recordPacking=xml&maximumRecords="+CNT
+    +"&query="+encodeURIComponent(q)+"&sortBy="+encodeURIComponent("issued_date/sort.descending");
+  const d={via:"SRU",code,from,until,tries:0};
+  let lastErr="";
+  for(let a=0;a<=RETRY.length;a++){
+    if(ctx.stale())return null;
+    if(a>0){ctx.progress(`NDLサーチが混み合っています。${Math.round(RETRY[a-1]/1000)}秒待ってから再試行します(${from===until?from:from+"〜"+until}、${a}/${RETRY.length}回目)…`);await sleep(RETRY[a-1]);if(ctx.stale())return null}
+    d.tries=a+1;
+    try{
+      const res=await throttled(()=>fetch(u));d.status=res.status;
+      if(res.status===429||res.status>=500){lastErr="HTTP "+res.status;continue}
+      if(!res.ok)throw new Error("HTTP "+res.status);
+      const r=parseSru(await res.text());d.items=r.items.length;d.total=r.total;d.records=r.records;DIAG.ndl.push(d);return r;
+    }catch(e){
+      if(e&&e.name==="TypeError"){lastErr="通信エラー";continue}       // 通信エラー(混雑・429を含む) → 再試行
+      d.error=String(e&&e.message||e);DIAG.ndl.push(d);DIAG.errors.push("SRU: "+d.error);return null
+    }
+  }
+  d.error=lastErr+"(再試行しても取得できませんでした)";DIAG.ndl.push(d);DIAG.errors.push("SRU: "+d.error);return null;
+}
+// 直近半年分を取得する。1回で取れるのは500件までなので、500件を超える場合は 月ごと → 日ごと に期間を分けて複数回取得する
+async function sruCollect(code,stale,progress,rg,onBatch){
+  const found=new Map();let reqs=0,truncated=0,failedRanges=0;
+  const ctx={stale,progress};
+  const add=r=>r.items.forEach(b=>{if(!found.has(b.isbn))found.set(b.isbn,b)});
+  async function run(from,until){
+    if(stale()||reqs>=MAX_REQ||failedRanges>=3)return null;   // 3つの期間で取得に失敗したら、混雑とみなして打ち切る
+    reqs++;const r=await sruRange(code,from,until,ctx);
+    if(r){add(r);if(onBatch)onBatch([...r.items]);progress(`NDLサーチから取得しています… ${from===until?from:from+"〜"+until}(リクエスト ${reqs}回目、ISBNあり ${found.size}件)`)}
+    else if(!stale())failedRanges++;
+    return r;
+  }
+  const whole=await run(rg.from,rg.until);
+  if(!whole)return{ok:false,found,truncated,reqs,failedRanges};
+  if((whole.total??0)>CNT){
+    const months=[];for(let i=0;i<PERIOD_MONTHS;i++){let m=rg.end.m-i,y=rg.end.y;while(m<1){m+=12;y--}months.push([y,m])}
+    await parallel(months,1,async([y,m])=>{
+      const k=ym(y,m),rm=await run(k,k);
+      if(rm&&(rm.total??0)>CNT){                       // 1か月でも500件を超える → 日ごと
+        const last=new Date(y,m,0).getDate();let over=0;
+        await parallel(Array.from({length:last},(_,i)=>last-i),1,async d=>{
+          const k2=`${k}-${String(d).padStart(2,"0")}`,rd=await run(k2,k2);
+          if(rd&&(rd.total??0)>CNT)over++;return[];
+        });
+        if(over||reqs>=MAX_REQ)truncated++;
+      }
+      return[];
+    });
+  }
+  return{ok:true,found,truncated,reqs,failedRanges};
+}
+async function ndlQuery(code,rg){
+  const u=NDL+"?ndc="+encodeURIComponent(code)+"&cnt="+CNT+`&from=${rg.from}&until=${rg.until}`;
+  const d={via:"OpenSearch",code};
+  try{
+    const res=await fetch(u);d.status=res.status;
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    const r=parseRss(await res.text());d.items=r.items.length;d.total=r.total;DIAG.ndl.push(d);return r.items;
+  }catch(e){d.error=String(e&&e.message||e);DIAG.ndl.push(d);DIAG.errors.push("NDL: "+d.error);return[]}
+}
+async function parallel(tasks,limit,fn){
+  let i=0;const out=[];
+  await Promise.all(Array.from({length:limit},async()=>{while(i<tasks.length){const t=tasks[i++];out.push(...await fn(t))}}));
+  return out;
+}
+
+// ===== OpenBD(書影・書誌) =====
+function parseBd(r){
+  if(!r||!r.summary)return null;const s=r.summary;
+  let desc="";try{const t=r.onix.CollateralDetail.TextContent;desc=(t.find(x=>x.TextType==="03")||t[0]).Text}catch(e){}
+  let cover=s.cover||"";
+  if(!cover)try{for(const sr of r.onix.CollateralDetail.SupportingResource)for(const v of sr.ResourceVersion||[])if(v.ResourceLink&&!cover)cover=v.ResourceLink}catch(e){}
+  const arr=x=>x==null?[]:(Array.isArray(x)?x:[x]);
+  let price="",pages="",ccode="";
+  try{const p0=arr(r.onix.ProductSupply.SupplyDetail).flatMap(sd=>arr(sd.Price))[0];if(p0&&p0.PriceAmount)price=String(p0.PriceAmount)}catch(e){}
+  try{const e0=arr(r.onix.DescriptiveDetail.Extent).find(e=>e.ExtentType==="11")||arr(r.onix.DescriptiveDetail.Extent)[0];if(e0&&e0.ExtentValue)pages=String(e0.ExtentValue)}catch(e){}
+  try{for(const x of arr(r.onix.DescriptiveDetail.Subject))if(x.SubjectSchemeIdentifier==="78"&&x.SubjectCode)ccode=x.SubjectCode}catch(e){}
+  // ONIXコードリスト153(テキスト種別)の主なもの
+  const TL={"02":"紹介文","03":"内容紹介","04":"目次","05":"カバー・帯のコピー","10":"キャッチコピー","11":"特徴","12":"著者紹介","13":"お知らせ","14":"抜粋"};
+  let texts=[];try{texts=arr(r.onix.CollateralDetail.TextContent).filter(t=>t&&t.Text).map(t=>({label:TL[t.TextType]||"紹介",text:String(t.Text).trim().slice(0,1500)}))}catch(e){}
+  return{title:s.title,author:s.author,publisher:s.publisher,pubdate:s.pubdate,cover,desc:desc.replace(/\s+/g," ").slice(0,160),
+    series:s.series||"",volume:s.volume||"",price,pages,ccode,texts};
+}
+async function openbdFetch(isbns){
+  const out=new Map();
+  const chunks=[];for(let i=0;i<isbns.length;i+=200)chunks.push(isbns.slice(i,i+200));
+  await parallel(chunks,3,async c=>{
+    try{const res=await fetch(OPENBD+c.join(","));const arr=await res.json();
+      arr.forEach((r,i)=>{const b=parseBd(r);if(b)out.set(c[i],b)})}
+    catch(e){DIAG.errors.push("OpenBD: "+String(e&&e.message||e))}
+    return[];
+  });
+  return out;
+}
+
+// ===== 取得 → デッキ =====
+const books=new Map();let queue=[];
+let runId=0,loading=false,dragging=false,flinging=false;
+// 取得できた分から順にカードに加える。表示中のカードの並びは崩さず、2枚目以降(未表示分)にランダムに混ぜる
+function addToQueue(ids){
+  if(!ids.length)return;
+  const head=queue.slice(0,2),rest=queue.slice(2).concat(ids);
+  for(let i=rest.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[rest[i],rest[j]]=[rest[j],rest[i]]}
+  queue=head.concat(rest);
+  // カードが無い、または2枚目(下のカード)がまだ無いときだけ描き直す。スワイプ中・飛ばす動作中は触らない
+  if(!dragging&&!flinging&&(!deck.querySelector(".card")||(queue.length>=2&&!deck.querySelector(".card.back"))))render();
+}
+async function fetchBooks(code){
+  const my=++runId;loading=true;
+  const rg=rangeNow();                      // 検索を実行した時点の現在時刻から、取得する期間を決める
+  const stale=()=>my!==runId;               // 「やり直す」などで新しい操作が始まったら、古い取得は打ち切る
+  let errorShown=false;
+  showScreen("play");books.clear();queue=[];render();
+  $("period").textContent=`新着資料 ｜ ${PERIOD_NAME}に出版された最近の資料を紹介しています(${rg.span})`;
+  const known=new Set();
+  let pipeline=Promise.resolve();           // OpenBDでの書影確認は、NDLサーチの取得と並行して、届いた分から順に行う
+  const onBatch=items=>{
+    const fresh=items.filter(b=>b.isbn&&!known.has(b.isbn));
+    fresh.forEach(b=>known.add(b.isbn));
+    if(!fresh.length)return;
+    pipeline=pipeline.then(async()=>{
+      if(stale())return;
+      const bd=await openbdFetch(fresh.map(b=>b.isbn));
+      if(stale())return;
+      DIAG.openbdHit+=bd.size;
+      const done=new Set([...store.liked,...store.seen]),ids=[];
+      fresh.forEach(b=>{
+        const o=bd.get(b.isbn)||{};
+        const m={isbn:b.isbn,title:o.title||b.title,author:o.author||b.author,publisher:o.publisher||b.publisher,pubdate:o.pubdate||b.pubdate,cover:o.cover||"",desc:o.desc||"",
+          series:o.series||b.series||"",volume:o.volume||b.volume||"",price:b.price||o.price||"",pages:b.extent||o.pages||"",edition:b.edition||"",place:b.place||"",ndc:b.ndc||"",ccode:o.ccode||"",texts:o.texts||[]};
+        m.hasCover=!!m.cover;books.set(b.isbn,m);
+        if(!done.has(b.isbn))ids.push(b.isbn);
+      });
+      addToQueue(ids);
+    }).catch(e=>DIAG.errors.push("処理: "+String(e&&e.message||e)));
+  };
+  try{
+    msg(`NDLサーチから NDC ${code} の${rg.label}の資料を取得しています…(取得できた分から順に表示します)`);
+    const res=await sruCollect(code,stale,msg,rg,onBatch);
+    if(stale())return;
+    let via="SRU";
+    if(!known.size){
+      DIAG.errors.push("SRUで取得できなかったため、OpenSearch(書名順)に切り替えました");
+      msg("SRUで取得できなかったため、OpenSearchで取得しています…");
+      const items=await ndlQuery(code,rg);
+      if(stale())return;
+      onBatch(items);via="OpenSearch";
+    }
+    await pipeline;
+    if(stale())return;
+    DIAG.via=via;DIAG.ndlIsbns=known.size;
+    if(!books.size){
+      msg("");errorShown=true;
+      const err=DIAG.errors.length?"通信エラーが発生しました。しばらくしてから、もう一度お試しください。":"該当する資料がありませんでした。別の分野を試してください。";
+      deck.innerHTML=`<div class="empty"><b>資料を取得できませんでした</b><span>${err}</span><button id="rd">質問からやり直す</button></div>`;
+      $("rd").onclick=restart;return;
+    }
+    const c=[...books.values()].filter(b=>b.hasCover).length;
+    DIAG.withCover=c;showDiag();
+    const range=rg.label;
+    msg(via==="SRU"
+      ?`${range}の資料を${books.size}件取得しました(うちOpenBDの書影あり ${c}件)。`+(res.truncated?`1日だけで500件を超える日があったため、その分は一部取得できていません。`:"")+(res.reqs>=MAX_REQ?"リクエスト回数の上限に達したため、一部は取得できていません。":"")+(res.failedRanges?"NDLサーチが混み合っていて、一部の期間を取得できませんでした。しばらくしてからもう一度お試しください。":"")
+      :`SRUで取得できなかったため、OpenSearch(書名順)で${range}の資料を最大${CNT}件取得しました(${books.size}件、うちOpenBDの書影あり ${c}件)。`);
+  }finally{
+    if(!stale()){loading=false;if(!errorShown&&!deck.querySelector(".card"))render()}
+  }
+}
+
+// ===== カード・スワイプ =====
+const deck=$("deck");
+function setCover(img,b,onFail){
+  if(!b||!b.cover){onFail();return}
+  img.onerror=onFail;img.onload=()=>{if(img.naturalWidth<=1)onFail()};img.src=b.cover;
+}
+function cardEl(b,back){
+  const c=document.createElement("div");c.className="card"+(back?" back":"");c.dataset.isbn=b.isbn;
+  c.innerHTML=`<div class="cover"><span class="hint">タップで詳しく見る</span></div><div class="meta"><h2>${esc(b.title)}</h2><p>${esc(b.author||"")} ／ ${esc(b.publisher||"")} ${esc(b.pubdate||"")}</p>${b.desc?`<p class="d">${esc(b.desc)}</p>`:""}</div><span class="stamp l">気になる</span><span class="stamp n">パス</span>`;
+  const box=c.querySelector(".cover");const img=new Image();img.alt=b.title+"の書影";img.draggable=false;box.appendChild(img);
+  setCover(img,b,()=>{img.remove();box.insertAdjacentHTML("afterbegin",`<div class="nocover">${esc(b.title)}<small>書影なし</small></div>`)});
+  return c;
+}
+function render(){
+  deck.innerHTML="";
+  if(!queue.length){
+    const more=loading;   // 取得の途中なら、続きが届くのを待つ
+    deck.innerHTML=`<div class="empty"><b>${more?(books.size?"続きを取得しています…":"読み込み中…"):(books.size?"すべてめくりました":"資料がありません")}</b><span>${more?"取得できた分から順に表示します。":(books.size?"条件を変えてもう一度さがせます。":"")}</span>${(!more&&books.size)?'<button id="rd">質問からやり直す</button>':""}</div>`;
+    const r=$("rd");if(r)r.onclick=restart;return;
+  }
+  if(queue[1])deck.appendChild(cardEl(books.get(queue[1]),true));
+  const top=cardEl(books.get(queue[0]),false);deck.appendChild(top);bind(top);
+}
+function bind(c){
+  let sx=0,sy=0,dx=0,drag=false,onCover=false;const l=c.querySelector(".l"),n=c.querySelector(".n");
+  c.onpointerdown=e=>{drag=true;dragging=true;onCover=!!(e.target.closest&&e.target.closest(".cover"));sx=e.clientX;sy=e.clientY;c.setPointerCapture(e.pointerId);c.style.transition="none"};
+  c.onpointermove=e=>{if(!drag)return;dx=e.clientX-sx;const dy=(e.clientY-sy)*.3;
+    c.style.transform=`translate(${dx}px,${dy}px) rotate(${dx/18}deg)`;
+    l.style.opacity=Math.max(0,Math.min(1,dx/100));n.style.opacity=Math.max(0,Math.min(1,-dx/100))};
+  c.onpointerup=c.onpointercancel=e=>{if(!drag)return;drag=false;dragging=false;
+    // ほとんど動かさずに離した(タップ)場合、書影の部分なら詳細を開く
+    if(e.type==="pointerup"&&onCover&&Math.hypot(e.clientX-sx,e.clientY-sy)<8){c.style.transform="";dx=0;openDetail(c.dataset.isbn,true);return}
+    if(Math.abs(dx)>90)fling(dx>0);else{c.style.transition="transform .25s";c.style.transform="";l.style.opacity=n.style.opacity=0}dx=0};
+}
+function fling(like){
+  const c=deck.querySelector(".card:not(.back)");if(!c||c.dataset.gone)return;c.dataset.gone=1;flinging=true;
+  const isbn=c.dataset.isbn,b=books.get(isbn);
+  c.style.transition="transform .3s,opacity .3s";
+  c.style.transform=`translate(${like?600:-600}px,40px) rotate(${like?25:-25}deg)`;c.style.opacity=0;
+  if(like){store.liked.push(isbn);store.meta[isbn]={isbn,title:b.title,author:b.author,publisher:b.publisher,pubdate:b.pubdate,cover:b.cover,desc:b.desc,series:b.series,volume:b.volume,price:b.price,pages:b.pages,edition:b.edition,place:b.place,ndc:b.ndc,ccode:b.ccode,texts:(b.texts||[]).slice(0,4).map(t=>({label:t.label,text:t.text.slice(0,600)}))}}else store.seen.push(isbn);
+  save();count();
+  setTimeout(()=>{queue.shift();flinging=false;render()},260);
+}
+function count(){$("cnt").textContent=store.liked.length}
+
+// ===== 気になるリスト =====
+function renderList(){
+  const el=$("list");
+  if(!store.liked.length){el.innerHTML='<div class="panel" style="color:var(--sub)">まだありません。右にめくると、ここに溜まります。</div>';return}
+  el.innerHTML=`<div class="tools"><button id="cp">ISBN一覧をコピー</button><button id="cl">リストを空にする</button></div>`+
+  store.liked.map(i=>{const b=books.get(i)||store.meta[i];if(!b)return"";
+    return`<div class="row" data-open="${i}" tabindex="0" role="button" aria-label="${esc(b.title)}の詳細を開く"><img data-i="${i}" alt=""><div><b>${esc(b.title)}</b><small>${esc(b.author||"")}</small><small>${esc(b.publisher||"")} ${esc(b.pubdate||"")} ISBN ${i}</small><a href="https://ndlsearch.ndl.go.jp/search?cs=bib&keyword=${i}" target="_blank" rel="noopener">NDLサーチで所蔵を探す</a></div></div>`}).join("");
+  el.querySelectorAll("img[data-i]").forEach(im=>setCover(im,books.get(im.dataset.i)||store.meta[im.dataset.i],()=>{im.style.visibility="hidden"}));
+  el.querySelectorAll(".row[data-open]").forEach(r=>{
+    r.onclick=e=>{if(e.target.closest("a"))return;openDetail(r.dataset.open,false)};
+    r.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openDetail(r.dataset.open,false)}};
+  });
+  $("cp").onclick=()=>navigator.clipboard.writeText(store.liked.join("\n")).then(()=>msg("コピーしました"),()=>msg("コピーできませんでした"));
+  $("cl").onclick=()=>{if(confirm("気になるリストを空にしますか?")){store.liked=[];save();count();renderList()}};
+}
+
+
+// ===== 詳細書誌 =====
+let lastFocus=null;
+function openDetail(isbn,fromDeck){
+  const b=books.get(isbn)||store.meta[isbn];if(!b)return;
+  const row=(k,v)=>v?`<dt>${k}</dt><dd>${esc(v)}</dd>`:"";
+  const price=b.price?(/^\d+$/.test(String(b.price))?`${Number(b.price).toLocaleString()}円`:String(b.price)):"";
+  const pages=b.pages?(/^\d+$/.test(String(b.pages))?`${b.pages}ページ`:String(b.pages)):"";
+  const texts=(b.texts&&b.texts.length)?b.texts:(b.desc?[{label:"内容紹介",text:b.desc}]:[]);
+  const secs=texts.map(t=>`<div class="sh-sec"><h3>${esc(t.label)}</h3><p>${esc(t.text).replace(/\n+/g,"<br>")}</p></div>`).join("");
+  $("shBody").innerHTML=`<button class="sh-close" id="shX" aria-label="閉じる">✕</button>
+   <div class="sh-head"><div class="sh-cover" id="shCover"></div>
+    <div><h2 class="sh-title" id="shTitle">${esc(b.title)}</h2>
+     <p class="sh-sub">${esc(b.author||"")}</p><p class="sh-sub">${esc(b.publisher||"")}${b.pubdate?" ／ "+esc(b.pubdate):""}</p></div></div>
+   <dl class="biblio">
+    ${row("書名",b.title)}${row("巻次",b.volume)}${row("シリーズ",b.series)}${row("著者",b.author)}${row("出版者",b.publisher)}${row("出版地",b.place)}
+    ${row("出版年月",b.pubdate)}${row("版",b.edition)}${row("価格",price)}${row("ページ数など",pages)}${row("NDC",b.ndc)}${row("Cコード",b.ccode)}${row("ISBN",isbn)}
+   </dl>
+   ${secs||'<p class="sh-note">この資料の内容紹介・目次は、取得できたデータにありませんでした。</p>'}
+   <div class="sh-act">
+    ${fromDeck?'<button class="no" id="shNo">パス</button><button class="pri" id="shYes">気になる</button>':""}
+    <a href="https://ndlsearch.ndl.go.jp/search?cs=bib&keyword=${encodeURIComponent(isbn)}" target="_blank" rel="noopener">NDLサーチで所蔵を探す</a>
+   </div>
+   <p class="sh-note">書誌はNDLサーチ、書影・内容紹介はOpenBDから取得したものです。</p>`;
+  const box=$("shCover"),img=new Image();img.alt=(b.title||"")+"の書影";box.appendChild(img);
+  setCover(img,b,()=>{img.remove();box.insertAdjacentHTML("beforeend",`<div class="nc">${esc(b.title||"")}<br>(書影なし)</div>`)});
+  lastFocus=document.activeElement;
+  $("sheet").hidden=false;$("shBody").scrollTop=0;$("shX").focus();
+  $("shX").onclick=closeDetail;
+  if(fromDeck){$("shNo").onclick=()=>{closeDetail();fling(false)};$("shYes").onclick=()=>{closeDetail();fling(true)}}
+}
+function closeDetail(){$("sheet").hidden=true;if(lastFocus&&lastFocus.focus)try{lastFocus.focus()}catch(e){}}
+$("shBg").onclick=closeDetail;
+
+// ===== 画面遷移・イベント =====
+function restart(){runId++;loading=false;books.clear();queue=[];msg("");step=0;showScreen("qa");renderQA()}
+$("tDeck").onclick=()=>{const p=loading||books.size>0;showScreen(p?"play":"qa");if(!p)renderQA()};
+$("tList").onclick=()=>{msg("");showScreen("list");renderList()};
+$("yes").onclick=()=>fling(true);$("no").onclick=()=>fling(false);
+$("redo").onclick=restart;
+addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&!$("sheet").hidden){closeDetail();return}
+  if(!$("sheet").hidden||e.target.tagName==="INPUT"||$("play").style.display==="none")return;
+  if(e.key==="ArrowRight")fling(true);if(e.key==="ArrowLeft")fling(false);
+});
+count();showScreen("qa");renderQA();showDiag();
+</script>
+</body>
+</html>
